@@ -127,21 +127,19 @@ def calcola_ttm(filings):
 def ttm_calcolabile(ttm_result):
     return not ttm_result.startswith("NetIncomeTTM: Non calcolabile")
 
-def stampa_blocco_netincome(cik_str, tipo, best_tag, best_values, output_file, ttm_result):
+def stampa_blocco_netincome(cik_str, ticker, tipo, best_tag, best_values, output_file, ttm_result):
     from datetime import datetime, timedelta
 
     today = datetime.today()
     dodici_mesi_fa = today - timedelta(days=366)
     ventiquattro_mesi_fa = today - timedelta(days=730)
 
-    # Annuali: durata 12 mesi, end negli ultimi 12 mesi
     filings_annuali = [
         v for v in best_values
         if v.get("end") and v.get("start")
         and datetime.strptime(v["end"], "%Y-%m-%d") >= dodici_mesi_fa
         and 350 <= (datetime.strptime(v["end"], "%Y-%m-%d") - datetime.strptime(v["start"], "%Y-%m-%d")).days <= 370
     ]
-    # Trimestrali: durata 3 mesi, end negli ultimi 24 mesi
     filings_trimestrali = [
         v for v in best_values
         if v.get("end") and v.get("start")
@@ -149,7 +147,7 @@ def stampa_blocco_netincome(cik_str, tipo, best_tag, best_values, output_file, t
         and 80 <= (datetime.strptime(v["end"], "%Y-%m-%d") - datetime.strptime(v["start"], "%Y-%m-%d")).days <= 100
     ]
 
-    output_file.write(f"\n[CIK: {cik_str}] {tipo}\n")
+    output_file.write(f"\n[CIK: {cik_str}][{ticker}] {tipo}\n")
     output_file.write("  --- Annuali usati per il calcolo ---\n")
     for v in filings_annuali:
         output_file.write(
@@ -232,7 +230,7 @@ if __name__ == "__main__":
                             risultati.append(("NetIncome DILUTED", "NetIncomeLossAvailableToCommonStockholdersDiluted", values_diluted, ttm_diluted))
                     if risultati:
                         for tipo, best_tag, best_values, ttm in risultati:
-                            stampa_blocco_netincome(cik_str, tipo, best_tag, best_values, f, ttm)
+                            stampa_blocco_netincome(cik_str, ticker, tipo, best_tag, best_values, f, ttm)
                             dati_scritti = True
                         f.write("\n" + "="*80 + "\n")
                 elif values_diluted:
@@ -258,7 +256,7 @@ if __name__ == "__main__":
                                                   "NetIncomeLossAvailableToCommonStockholdersBasic", basic_ricavato, ttm_basic_ricavato))
                         if risultati:
                             for tipo, best_tag, best_values, ttm in risultati:
-                                stampa_blocco_netincome(cik_str, tipo, best_tag, best_values, f, ttm)
+                                stampa_blocco_netincome(cik_str, ticker, tipo, best_tag, best_values, f, ttm)
                                 dati_scritti = True
                                 if tipo == "NetIncome DILUTED" and not basic_ricavato:
                                     f.write(
@@ -276,7 +274,7 @@ if __name__ == "__main__":
                             best_values = values
                     if best_tag and best_values:
                         ttm_fallback = calcola_ttm(best_values)
-                        stampa_blocco_netincome(cik_str, f"TAG SELEZIONATO: {best_tag}", best_tag, best_values, f, ttm_fallback)
+                        stampa_blocco_netincome(cik_str, ticker, f"TAG SELEZIONATO: {best_tag}", best_tag, best_values, f, ttm_fallback)
                         dati_scritti = True
                     else:
                         motivo = f"Nessun dato sufficiente trovato per {ticker}"
