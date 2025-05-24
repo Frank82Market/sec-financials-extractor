@@ -1,0 +1,6 @@
+.env
+test_output/
+*.csv
+__pycache__/
+*.pyc
+data/

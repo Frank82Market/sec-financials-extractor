@@ -1,0 +1,161 @@
+Metadata-Version: 2.4
+Name: secedgar
+Version: 0.6.0
+Summary: SEC-Edgar implements a basic crawler for downloading
+Home-page: https://github.com/sec-edgar/sec-edgar
+Download-URL: https://github.com/sec-edgar/sec-edgar/releases
+Author: Rahul Ranjan
+Author-email: rahul.rrixe@gmail.com
+Maintainer: Jack Moody
+Maintainer-email: jacklaytonmoody@gmail.com
+License: Apache License (2.0)
+Keywords: SEC,EDGAR,crawler,filings
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Environment :: Console
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Description-Content-Type: text/x-rst
+License-File: LICENSE
+Requires-Dist: beautifulsoup4
+Requires-Dist: aiohttp
+Requires-Dist: urllib3
+Requires-Dist: requests
+Requires-Dist: lxml
+Requires-Dist: tqdm
+Provides-Extra: cli
+Requires-Dist: beautifulsoup4; extra == "cli"
+Requires-Dist: aiohttp; extra == "cli"
+Requires-Dist: urllib3; extra == "cli"
+Requires-Dist: requests; extra == "cli"
+Requires-Dist: lxml; extra == "cli"
+Requires-Dist: tqdm; extra == "cli"
+Requires-Dist: Click; extra == "cli"
+Requires-Dist: typing_extensions<4.2.0; python_version == "3.6"
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: download-url
+Dynamic: home-page
+Dynamic: keywords
+Dynamic: license
+Dynamic: license-file
+Dynamic: maintainer
+Dynamic: maintainer-email
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: summary
+
+sec-edgar
+=========
+
+|Tests Status| |Docs Status|
+
+Getting filings of various companies at once is really a pain, but
+SEC-Edgar does that for you. You can download all of a company’s
+periodic reports, filings and forms from the EDGAR database with a
+single command.
+
+Installation
+------------
+
+You can install the package using pip:
+
+.. code:: bash
+
+   $ pip install secedgar
+
+OR
+
+You can clone the project:
+
+.. code:: bash
+
+   $ git clone https://github.com/sec-edgar/sec-edgar.git
+   $ cd sec-edgar
+   $ python setup.py install
+
+Running
+-------
+
+If you are using Jupyter Notebook, you'll need to install and configure nest-asyncio:
+
+.. code-block:: bash
+
+   pip install nest-asyncio
+
+Then add the following code at the start of your notebook:
+
+.. code-block:: python
+
+   import nest_asyncio
+   nest_asyncio.apply()
+
+Company Filings
+~~~~~~~~~~~~~~~
+
+Single Company
+^^^^^^^^^^^^^^
+
+.. code:: python
+
+    from secedgar import filings, FilingType
+
+    # 10Q filings for Apple (ticker "aapl")
+    my_filings = filings(cik_lookup="aapl",
+                         filing_type=FilingType.FILING_10Q,
+                         user_agent="Your name (your email)")
+    my_filings.save('/path/to/dir')
+
+
+Multiple Companies
+^^^^^^^^^^^^^^^^^^
+
+.. code:: python
+
+    from secedgar import filings, FilingType
+
+    # 10Q filings for Apple and Facebook (tickers "aapl" and "fb")
+    my_filings = filings(cik_lookup=["aapl", "fb"],
+                         filing_type=FilingType.FILING_10Q,
+                         user_agent="Your name (your email)")
+    my_filings.save('/path/to/dir')
+
+
+Daily Filings
+~~~~~~~~~~~~~
+
+
+.. code:: python
+
+    from secedgar import filings
+    from datetime import date
+
+    daily_filings = filings(start_date=date(2021, 6, 30),
+                            user_agent="Your name (your email)")
+    daily_urls = daily_filings.get_urls()
+
+
+
+Supported Methods
+-----------------
+
+Currently this crawler supports many different filing types. To see the full list, please refer to the docs. If you don't see a filing type you would like
+to be supported, please create an issue on GitHub.
+
+Documentation
+--------------
+To learn more about the APIs and latest changes in the project, read the `official documentation <https://sec-edgar.github.io/sec-edgar>`_.
+
+
+.. |Tests Status| image:: https://github.com/sec-edgar/sec-edgar/actions/workflows/test.yml/badge.svg
+   :target: https://github.com/sec-edgar/sec-edgar/actions/workflows/test.yml
+.. |Docs Status| image:: https://github.com/sec-edgar/sec-edgar/actions/workflows/docs.yml/badge.svg
+   :target: https://github.com/sec-edgar/sec-edgar/actions/workflows/docs.yml
