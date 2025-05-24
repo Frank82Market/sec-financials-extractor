@@ -17,10 +17,14 @@ def is_quarterly_period(start, end):
         return False
 
 def get_fiscal_year_end(best_values):
-    filings_10k = [v for v in best_values if v.get("form", "N/A") == "10-K" and v.get("end")]
-    if filings_10k:
-        latest_10k = max(filings_10k, key=lambda x: x["end"])
-        fiscal_year_end = latest_10k["end"]
+    filings_annuali = [
+        v for v in best_values
+        if v.get("end") and v.get("start")
+        and 350 <= (datetime.strptime(v["end"], "%Y-%m-%d") - datetime.strptime(v["start"], "%Y-%m-%d")).days <= 370
+    ]
+    if filings_annuali:
+        latest_annuale = max(filings_annuali, key=lambda x: x["end"])
+        fiscal_year_end = latest_annuale["end"]
         fiscal_year_end_dt = datetime.strptime(fiscal_year_end, "%Y-%m-%d")
         return fiscal_year_end_dt
     return None
@@ -49,7 +53,6 @@ def deduplicate_by_period_keep_oldest(filings):
     return list(dedup.values())
 
 def date_match_approx(start1, end1, start2, end2, tolleranza_giorni=7):
-    from datetime import datetime
     s1 = datetime.strptime(start1, "%Y-%m-%d")
     e1 = datetime.strptime(end1, "%Y-%m-%d")
     s2 = datetime.strptime(start2, "%Y-%m-%d")
@@ -62,49 +65,55 @@ def date_match_approx(start1, end1, start2, end2, tolleranza_giorni=7):
     )
 
 def calcola_ttm(filings):
-    from datetime import datetime, timedelta
+    from datetime import timedelta
     import pandas as pd
 
     today = datetime.today()
     dodici_mesi_fa = today - timedelta(days=366)
     ventiquattro_mesi_fa = today - timedelta(days=730)
 
-    # Prendi tutti i record annuali (12 mesi) con end negli ultimi 12 mesi, indipendentemente dal form
+    # Annuali: durata 12 mesi, end negli ultimi 12 mesi
     filings_annuali = [
         v for v in filings
         if v.get("end") and v.get("start")
         and datetime.strptime(v["end"], "%Y-%m-%d") >= dodici_mesi_fa
         and 350 <= (datetime.strptime(v["end"], "%Y-%m-%d") - datetime.strptime(v["start"], "%Y-%m-%d")).days <= 370
     ]
-    filings_10q = [v for v in filings if v.get("form") == "10-Q" and "end" in v]
-    filings_10q = [v for v in filings_10q if datetime.strptime(v["end"], "%Y-%m-%d") >= ventiquattro_mesi_fa]
+    # Trimestrali: durata 3 mesi, end negli ultimi 24 mesi
+    filings_trimestrali = [
+        v for v in filings
+        if v.get("end") and v.get("start")
+        and datetime.strptime(v["end"], "%Y-%m-%d") >= ventiquattro_mesi_fa
+        and 80 <= (datetime.strptime(v["end"], "%Y-%m-%d") - datetime.strptime(v["start"], "%Y-%m-%d")).days <= 100
+    ]
 
     if not filings_annuali:
         return "NetIncomeTTM: Non calcolabile (nessun annuale 12 mesi negli ultimi 12 mesi)"
 
-    # Prendi il record annuale più recente
+    # Prendi l'annuale più recente
     annuale = max(filings_annuali, key=lambda x: x["end"])
     annuale_end = annuale["end"]
     annuale_val = float(annuale["val"])
 
-    # Trova tutti i 10-Q successivi al record annuale
-    filings_10q_successivi = sorted(
-        [v for v in filings_10q if v["start"] > annuale_end],
+    # Trova tutti i trimestrali successivi all'annuale più recente
+    trimestrali_successivi = sorted(
+        [v for v in filings_trimestrali if v["start"] > annuale_end],
         key=lambda x: x["start"]
     )
 
-    if not filings_10q_successivi:
+    if not trimestrali_successivi:
         return f"NetIncomeTTM: {int(annuale_val)}"
 
     ttm = annuale_val
-    for q in filings_10q_successivi:
+    for q in trimestrali_successivi:
         q_val = float(q["val"])
         ttm += q_val
         try:
+            # Cerca il trimestre corrispondente dell'anno precedente (stesse date con tolleranza)
             q_start_prev = (datetime.strptime(q["start"], "%Y-%m-%d") - pd.DateOffset(years=1)).strftime("%Y-%m-%d")
             q_end_prev = (datetime.strptime(q["end"], "%Y-%m-%d") - pd.DateOffset(years=1)).strftime("%Y-%m-%d")
             q_match = next(
-                (v for v in filings_10q if date_match_approx(v["start"], v["end"], q_start_prev, q_end_prev, tolleranza_giorni=7)),
+                (v for v in filings_trimestrali if date_match_approx(v["start"], v["end"], q_start_prev, q_end_prev, tolleranza_giorni=7)),
                 None
             )
             if q_match:
@@ -119,30 +128,35 @@ def ttm_calcolabile(ttm_result):
     return not ttm_result.startswith("NetIncomeTTM: Non calcolabile")
 
 def stampa_blocco_netincome(cik_str, tipo, best_tag, best_values, output_file, ttm_result):
-    fiscal_year_end_dt = get_fiscal_year_end(best_values)
-    if fiscal_year_end_dt:
-        fiscal_year_end_prev = fiscal_year_end_dt.replace(year=fiscal_year_end_dt.year - 1)
-    else:
-        fiscal_year_end_prev = None
+    from datetime import datetime, timedelta
 
-    filings_filtered = []
     today = datetime.today()
-    for v in best_values:
-        form = v.get("form", "N/A")
-        start = v.get("start")
-        end = v.get("end")
-        if not end:
-            continue
-        end_dt = datetime.strptime(end, "%Y-%m-%d")
-        if fiscal_year_end_prev and (fiscal_year_end_prev < end_dt <= fiscal_year_end_dt):
-            if form in ("10-K", "10-Q") and start and end and 350 <= (datetime.strptime(end, "%Y-%m-%d") - datetime.strptime(start, "%Y-%m-%d")).days <= 370:
-                filings_filtered.append(v)
-        elif end_dt > fiscal_year_end_dt and end_dt <= today:
-            if form in ("10-K", "10-Q") and start and end and 350 <= (datetime.strptime(end, "%Y-%m-%d") - datetime.strptime(start, "%Y-%m-%d")).days <= 370:
-                filings_filtered.append(v)
-    filings_filtered = deduplicate_by_period_keep_oldest(filings_filtered)
+    dodici_mesi_fa = today - timedelta(days=366)
+    ventiquattro_mesi_fa = today - timedelta(days=730)
+
+    # Annuali: durata 12 mesi, end negli ultimi 12 mesi
+    filings_annuali = [
+        v for v in best_values
+        if v.get("end") and v.get("start")
+        and datetime.strptime(v["end"], "%Y-%m-%d") >= dodici_mesi_fa
+        and 350 <= (datetime.strptime(v["end"], "%Y-%m-%d") - datetime.strptime(v["start"], "%Y-%m-%d")).days <= 370
+    ]
+    # Trimestrali: durata 3 mesi, end negli ultimi 24 mesi
+    filings_trimestrali = [
+        v for v in best_values
+        if v.get("end") and v.get("start")
+        and datetime.strptime(v["end"], "%Y-%m-%d") >= ventiquattro_mesi_fa
+        and 80 <= (datetime.strptime(v["end"], "%Y-%m-%d") - datetime.strptime(v["start"], "%Y-%m-%d")).days <= 100
+    ]
+
     output_file.write(f"\n[CIK: {cik_str}] {tipo}\n")
-    for v in filings_filtered:
+    output_file.write("  --- Annuali usati per il calcolo ---\n")
+    for v in filings_annuali:
+        output_file.write(
+            f"  start: {v.get('start')}, end: {v.get('end')}, filed: {v.get('filed')}, form: {v.get('form', 'N/A')}, val: {v.get('val')}\n"
+        )
+    output_file.write("  --- Trimestrali usati per il calcolo ---\n")
+    for v in filings_trimestrali:
         output_file.write(
             f"  start: {v.get('start')}, end: {v.get('end')}, filed: {v.get('filed')}, form: {v.get('form', 'N/A')}, val: {v.get('val')}\n"
         )
